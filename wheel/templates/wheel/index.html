@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel of Names Clone</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+    <style>
+        :root {
+            --background-color: #121212;
+            --panel-bg-color: #212121;
+            --text-color-light: #ffffff;
+            --text-color-dark: #333;
+            --border-color: #424242;
+            --button-bg-color: #007bff;
+            --button-hover-color: #0056b3;
+            --winner-popup-header: #f1c40f;
+            --winner-popup-bg: #333333;
+            --remove-button-bg: #007bff;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color-light);
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* --- Main Layout --- */
+        .top-bar {
+            background-color: #004080;
+            padding: 10px 20px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 2rem;
+            padding: 1rem 2rem;
+            height: calc(100vh - 50px);
+            box-sizing: border-box;
+        }
+
+        .wheel-section {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .wheel-wrapper {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #wheelCanvas {
+            transition: transform 5s cubic-bezier(0.1, 0.5, 0.2, 1);
+            cursor: pointer;
+        }
+
+        #pointer {
+            position: absolute;
+            right: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 20px solid transparent;
+            border-bottom: 20px solid transparent;
+            border-left: 30px solid var(--winner-popup-header);
+            z-index: 10;
+        }
+
+        /* --- Controls Panel (Right) --- */
+        .controls-container {
+            background-color: var(--panel-bg-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            width: 300px;
+            max-width: 300px;
+            height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .controls-container h2 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+        
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            flex-grow: 1;
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background-color: #333;
+            color: var(--text-color-light);
+            font-size: 16px;
+            resize: none;
+        }
+
+        /* --- Winner Modal & Confetti --- */
+        #winnerModal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: var(--winner-popup-bg);
+            border-radius: 8px;
+            text-align: center;
+            width: 400px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background-color: var(--winner-popup-header);
+            padding: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text-color-dark);
+        }
+        
+        .winner-name {
+            font-size: 3rem;
+            font-weight: bold;
+            padding: 40px 20px;
+        }
+
+        .modal-footer {
+            padding: 15px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .close-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .remove-btn {
+            background-color: var(--remove-button-bg);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">wheelofnames.com</div>
+
+    <div class="main-container">
+        <div class="wheel-section">
+            <div class="wheel-wrapper">
+                <div id="pointer"></div>
+                <canvas id="wheelCanvas" width="600" height="600"></canvas>
+            </div>
+        </div>
+
+        <div class="controls-container">
+            <h2>Entries</h2>
+            <textarea id="names" rows="10">Ali
+Beatriz
+Charles
+Diya
+Eric
+Fatima
+Gabriel
+Hanna</textarea>
+            </div>
+    </div>
+    
+    <div id="winnerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                We have a winner!
+            </div>
+            <div class="winner-name"></div>
+            <div class="modal-footer">
+                <button id="closeBtn" class="modal-btn close-btn">Close</button>
+                <button id="removeBtn" class="modal-btn remove-btn">Remove</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const namesTextarea = document.getElementById('names');
+        const modal = document.getElementById('winnerModal');
+        const winnerNameEl = document.querySelector('.winner-name');
+        const closeBtn = document.getElementById('closeBtn');
+        const removeBtn = document.getElementById('removeBtn');
+
+        let names = [];
+        let secretWinner = null;
+        let currentWinner = null;
+        // สีตามต้นฉบับ
+        const wheelColors = ["#E53935", "#FFC107", "#4CAF50", "#1E88E5"]; 
+        let isSpinning = false;
+
+        function drawWheel() {
+            const numSegments = names.length;
+            const anglePerSegment = numSegments > 0 ? (2 * Math.PI) / numSegments : 0;
+            const radius = 290;
+            
+            // Clear canvas and set transform to default
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, 600, 600);
+
+            if (numSegments === 0) {
+                 // Draw empty state
+                ctx.fillStyle = '#444';
+                ctx.font = 'bold 22px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Add names to the list!', 300, 300);
+                return;
+            }
+            
+            ctx.save();
+            ctx.translate(300, 300); // Center of canvas
+
+            // วาดช่องสีและชื่อ
+            names.forEach((name, i) => {
+                const startAngle = i * anglePerSegment;
+                
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, radius, startAngle, startAngle + anglePerSegment);
+                ctx.closePath();
+                ctx.fillStyle = wheelColors[i % wheelColors.length];
+                ctx.fill();
+
+                // วาดเส้นขอบสีขาว
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // วาดชื่อ
+                ctx.save();
+                ctx.fillStyle = "white";
+                ctx.font = "bold 24px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                // หมุนแกนวาดให้ตรงกับกลางช่อง
+                ctx.rotate(startAngle + anglePerSegment / 2);
+                // วาดตัวหนังสือที่ระยะ 65% ของรัศมี
+                ctx.fillText(name, radius * 0.65, 0);
+                ctx.restore();
+            });
+            ctx.restore();
+
+            // วาดวงกลมตรงกลาง
+            ctx.beginPath();
+            ctx.arc(300, 300, 80, 0, 2 * Math.PI);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            // วาดข้อความ "Tap to spin"
+            ctx.fillStyle = '#444';
+            ctx.font = 'bold 22px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Tap to', 300, 290);
+            ctx.fillText('spin', 300, 315);
+        }
+
+        function handleInput() {
+            secretWinner = null;
+            const currentText = namesTextarea.value;
+            const lines = currentText.split('\n');
+            const newLines = [];
+            let textWasChanged = false;
+
+            lines.forEach(line => {
+                if (line.trim().endsWith(',')) {
+                    const cleanName = line.trim().slice(0, -1);
+                    secretWinner = cleanName;
+                    newLines.push(cleanName);
+                    textWasChanged = true;
+                } else {
+                    newLines.push(line);
+                }
+            });
+
+            if (textWasChanged) {
+                const cursorPos = namesTextarea.selectionStart;
+                namesTextarea.value = newLines.join('\n');
+                namesTextarea.setSelectionRange(cursorPos - 1, cursorPos - 1);
+            }
+            
+            names = namesTextarea.value.trim().split('\n').filter(n => n && n.trim() !== '');
+            // Reset the wheel transform before redrawing
+            canvas.style.transition = 'none';
+            canvas.style.transform = 'rotate(0rad)';
+            drawWheel();
+        }
+
+        async function startSpin() {
+            if (isSpinning || names.length < 2) return;
+            isSpinning = true;
+            
+            const predeterminedWinner = secretWinner;
+
+            const response = await fetch('/spin/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', },
+                body: JSON.stringify({ names: names, winner: predeterminedWinner })
+            });
+
+            const result = await response.json();
+            secretWinner = null;
+            currentWinner = result.winner;
+
+            const { winnerIndex } = result;
+            const segmentAngle = (2 * Math.PI) / names.length;
+            // เป้าหมายคือตัวชี้ทางขวา (มุม 0 หรือ 360 องศา)
+            const targetRotation = -(winnerIndex * segmentAngle + segmentAngle / 2);
+            const randomSpins = 5 + Math.random() * 5;
+            const finalAngle = targetRotation + (randomSpins * 2 * Math.PI);
+
+            // ใช้ CSS Transition สำหรับอนิเมชั่น
+            canvas.style.transition = 'transform 5s cubic-bezier(0.1, 0.5, 0.2, 1)';
+            canvas.style.transform = `rotate(${finalAngle}rad)`;
+            
+            // เมื่ออนิเมชั่นจบ
+            setTimeout(() => {
+                isSpinning = false;
+                showWinnerModal(currentWinner);
+            }, 5100); // เพิ่ม delay เล็กน้อย
+        }
+
+        function showWinnerModal(winner) {
+            winnerNameEl.textContent = winner;
+            modal.style.display = 'flex';
+            // ยิง Confetti!
+            confetti({
+                particleCount: 150,
+                spread: 90,
+                origin: { y: 0.6 }
+            });
+        }
+        
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        function removeWinner() {
+            if (currentWinner) {
+                const currentNames = namesTextarea.value.split('\n');
+                const newNames = currentNames.filter(name => name.trim() !== currentWinner.trim());
+                namesTextarea.value = newNames.join('\n');
+                handleInput(); // อัปเดตวงล้อ
+            }
+            closeModal();
+        }
+
+
+        // --- Event Listeners ---
+        namesTextarea.addEventListener('input', handleInput);
+        canvas.addEventListener('click', startSpin); // คลิกที่วงล้อเพื่อหมุน
+        closeBtn.addEventListener('click', closeModal);
+        removeBtn.addEventListener('click', removeWinner);
+        
+        // Initial Draw
+        handleInput();
+
+    </script>
+</body>
+</html>
